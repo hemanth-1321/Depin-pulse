@@ -4,7 +4,7 @@ import { prismaClient } from "db/client";
 const router = express.Router();
 
 router.post("/website", authMiddleWare, async (req, res) => {
-  const userId = req.userId!;
+  const userId = "1";
   const { url } = req.body;
   try {
     const website = await prismaClient.webSite.create({
@@ -50,12 +50,16 @@ router.get("/website/status", authMiddleWare, async (req, res) => {
 });
 
 router.get("/websites", authMiddleWare, async (req, res) => {
-  const userId = req.userId;
+  const userId = "1";
   try {
     const websites = await prismaClient.webSite.findMany({
       where: {
         userId: userId,
         disabled: false,
+      },
+
+      include: {
+        ticks: true,
       },
     });
 
