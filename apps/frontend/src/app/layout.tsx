@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Appbar } from "@/components/ui/Appbar";
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/sonner"
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -28,9 +30,18 @@ export default function RootLayout({
       <ClerkProvider>
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        >
+        >  <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
           <Appbar />
-          {children}
+            {children}
+            <Toaster />
+
+          </ThemeProvider>
+          
         </body>
       </ClerkProvider>
     </html>
