@@ -1,15 +1,15 @@
 import express from "express";
-import { authMiddleWare } from "../middlewares/authMiddleware";
+import { authMiddleware } from "../middlewares/authMiddleware";
 import { prismaClient } from "db/client";
 const router = express.Router();
 
-router.post("/website", authMiddleWare, async (req, res) => {
-  const userId = "1";
+router.post("/website", authMiddleware, async (req, res) => {
+  const userId = req.userId!;
   const { url } = req.body;
   try {
     const website = await prismaClient.webSite.create({
       data: {
-        userId,
+        userId: userId,
         url,
       },
     });
@@ -25,10 +25,10 @@ router.post("/website", authMiddleWare, async (req, res) => {
   }
 });
 
-router.get("/website/status", authMiddleWare, async (req, res) => {
+router.get("/website/status", authMiddleware, async (req, res) => {
   const websiteId = req.query.websiteId as unknown as string;
 
-  const userId = req.userId;
+  const userId = req.userId!;
   try {
     const data = await prismaClient.webSite.findFirst({
       where: {
@@ -49,8 +49,8 @@ router.get("/website/status", authMiddleWare, async (req, res) => {
   }
 });
 
-router.get("/websites", authMiddleWare, async (req, res) => {
-  const userId = "1";
+router.get("/websites", authMiddleware, async (req, res) => {
+  const userId = req.userId!;
   try {
     const websites = await prismaClient.webSite.findMany({
       where: {
@@ -72,7 +72,7 @@ router.get("/websites", authMiddleWare, async (req, res) => {
   }
 });
 
-router.delete("/website", authMiddleWare, async (req, res) => {
+router.delete("/website", authMiddleware, async (req, res) => {
   const { websiteId } = req.body;
   const userId = req.userId;
   try {

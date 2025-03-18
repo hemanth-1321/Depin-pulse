@@ -26,7 +26,7 @@ export function useWebSites() {
       const token = await getToken();
       const response = await axios.get(`${BACKEND_URL}/websites`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: token,
         },
       });
       setWebsites(response.data);
