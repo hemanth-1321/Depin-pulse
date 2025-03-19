@@ -24,6 +24,7 @@ export function useWebSites() {
   async function refreshWebsites() {
     try {
       const token = await getToken();
+      console.log("token", token);
       const response = await axios.get(`${BACKEND_URL}/websites`, {
         headers: {
           Authorization: token,
