@@ -1,177 +1,94 @@
-import { PublicKey } from "@solana/web3.js";
-import { randomUUIDv7, type ServerWebSocket } from "bun";
-import type { IncomingMessages, SignupIncomingMessage } from "common/types";
-import { prismaClient } from "db/client";
-import nacl from "tweetnacl";
-import naclUtil from "tweetnacl-util";
-const availabeValidator: {
-  validatorId: string;
-  socket: ServerWebSocket<unknown>;
-  publicKey: string;
-}[] = [];
+import "dotenv/config";
+import { randomUUIDv7 } from "bun";
+import { Keypair } from "@solana/web3.js";
+import {
+  type OutGoingMessages,
+  type SignupOutGoingMessage,
+} from "common/types";
+import { validateHandler } from "./handlers/validateHandler";
+import { signMessage } from "./handlers/signMessage";
 
-const CALLBACKS: { [callbackId: string]: (data: IncomingMessages) => void } =
-  {};
-const COST_PER_VALIDATION = 100; //lamports
+const CALLBACKS: {
+  [callbackId: string]: (data: SignupOutGoingMessage) => void;
+} = {};
 
-Bun.serve({
-  fetch(req, server) {
-    if (server.upgrade(req)) {
-      return;
-    }
-    return new Response("Upgrade failed", { status: 500 });
-  },
-  port: 8081,
+let validatorId: string | null = null;
 
-  websocket: {
-    async message(ws: ServerWebSocket<unknown>, message: string) {
-      const data: IncomingMessages = JSON.parse(message);
+async function main() {
+  try {
+    console.log("🔑 Loading private key...");
+    const secretKey = JSON.parse(process.env.PRIVATE_KEY || "[]");
 
-      if (data.type === "signup") {
-        const verified = await verifyMessage(
-          `Signed message for ${data.data.callbackId},${data.data.publicKey}`,
-          data.data.publicKey,
-          data.data.signedMessage
-        );
-        if (verified) {
-          await signupHandler(ws, data.data);
-        }
-      } else if (data.type === "validate") {
-        CALLBACKS[data.data.callbackId](data);
-        delete CALLBACKS[data.data.callbackId];
-      }
-    },
-    async close(ws: ServerWebSocket<unknown>) {
-      availabeValidator.splice(
-        availabeValidator.findIndex((v) => v.socket === ws),
-        1
+    if (!Array.isArray(secretKey) || secretKey.length === 0) {
+      throw new Error(
+        "Invalid or missing PRIVATE_KEY in environment variables."
       );
-    },
-  },
-});
+    }
 
-async function signupHandler(
-  ws: ServerWebSocket<unknown>,
-  { ip, publicKey, signedMessage, callbackId }: SignupIncomingMessage
-) {
-  const validator = await prismaClient.validator.findFirst({
-    where: {
-      publicKey,
-    },
-  });
+    const keypair = Keypair.fromSecretKey(new Uint8Array(secretKey));
+    console.log(`✅ Keypair loaded: ${keypair.publicKey.toBase58()}`);
 
-  if (validator) {
-    ws.send(
-      JSON.stringify({
+    const ws = new WebSocket("ws://localhost:8081");
+
+    ws.onopen = async () => {
+      console.log("✅ WebSocket connected to ws://localhost:8081");
+
+      const callbackId = randomUUIDv7();
+      CALLBACKS[callbackId] = (data: SignupOutGoingMessage) => {
+        console.log("🔄 Received signup response:", data);
+        validatorId = data.validatorId;
+        console.log(`✅ Validator ID updated: ${validatorId}`);
+      };
+
+      const signedMessage = await signMessage(
+        `Signed message for ${callbackId}, ${keypair.publicKey}`,
+        keypair
+      );
+
+      const payload = {
         type: "signup",
         data: {
-          validatorId: validator.id,
           callbackId,
+          ip: "192.168.0.102",
+          publicKey: keypair.publicKey.toBase58(),
+          signedMessage,
         },
-      })
-    );
-    availabeValidator.push({
-      validatorId: validator.id,
-      socket: ws,
-      publicKey: validator.publicKey,
-    });
-    return;
-  }
-
-  const newValidator = await prismaClient.validator.create({
-    data: {
-      ip,
-      publicKey,
-      location: "unknown",
-    },
-  });
-
-  ws.send(
-    JSON.stringify({
-      type: "signup",
-      data: {
-        validatorId: newValidator.id,
-        callbackId,
-      },
-    })
-  );
-  availabeValidator.push({
-    validatorId: newValidator.id,
-    socket: ws,
-    publicKey: newValidator.publicKey,
-  });
-}
-
-async function verifyMessage(
-  message: string,
-  publicKey: string,
-  signature: string
-) {
-  const messageBytes = naclUtil.decodeBase64(message);
-  const result = nacl.sign.detached.verify(
-    messageBytes,
-    new Uint8Array(JSON.parse(signature)),
-    new PublicKey(publicKey).toBytes()
-  );
-  return result;
-}
-
-setInterval(async () => {
-  const websitesToMonitor = await prismaClient.webSite.findMany({
-    where: {
-      disabled: false,
-    },
-  });
-  for (const website of websitesToMonitor) {
-    availabeValidator.forEach((validator) => {
-      const callbackId = randomUUIDv7();
-      console.log(
-        `Sending validate to ${validator.validatorId} ${website.url}`
-      );
-      validator.socket.send(
-        JSON.stringify({
-          data: {
-            url: website.url,
-            callbackId,
-          },
-        })
-      );
-
-      CALLBACKS[callbackId] = async (data: IncomingMessages) => {
-        if (data.type === "validate") {
-          const { validatorId, status, latency, signedMessage } = data.data;
-          const verified = await verifyMessage(
-            `Replying to ${callbackId}`,
-            validator.publicKey,
-            signedMessage
-          );
-
-          if (!verified) {
-            return;
-          }
-
-          await prismaClient.$transaction(async (tx) => {
-            await tx.webSiteTick.create({
-              data: {
-                websiteId: website.id,
-                validatorId,
-                latency,
-                status,
-                createdAt: new Date(),
-              },
-            });
-
-            await tx.validator.update({
-              where: {
-                id: validatorId,
-              },
-              data: {
-                pendingPayouts: COST_PER_VALIDATION,
-              },
-            });
-          });
-        }
       };
-    });
+
+      console.log("📤 Sending signup request:", payload);
+      ws.send(JSON.stringify(payload));
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        const data: OutGoingMessages = JSON.parse(event.data);
+        console.log("📥 Received WebSocket message:", data);
+
+        if (data.type === "signup") {
+          CALLBACKS[data.data.callbackId]?.(data.data);
+          delete CALLBACKS[data.data.callbackId];
+        } else if (data.type === "validate") {
+          await validateHandler(ws, data.data, keypair, validatorId);
+        }
+      } catch (error) {
+        console.error("❌ Error processing WebSocket message:", error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("🚨 WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.warn("⚠️ WebSocket connection closed.");
+    };
+  } catch (error) {
+    console.error("❌ Initialization error:", error);
   }
-}, 60 * 1000);
+}
+
+main();
+
+setInterval(() => {
+  console.log("⏳ Heartbeat check...");
+}, 10000);
