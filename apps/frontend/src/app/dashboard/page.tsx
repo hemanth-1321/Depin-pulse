@@ -62,12 +62,12 @@ function page() {
 
   //
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-black transition-colors duration-200">
       <div className="max-w-4xl mx-auto py-8 px-4">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-2">
             <Globe className="w-8 h-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Uptime Monitor</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Pulse-Check</h1>
           </div>
           <div className="flex items-center space-x-4">
           

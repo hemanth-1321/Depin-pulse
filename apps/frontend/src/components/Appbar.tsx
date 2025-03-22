@@ -6,8 +6,8 @@ import {
   SignedOut,
   UserButton,
 } from "@clerk/nextjs";
-import { ThemeProvider } from "../theme-provider";
-import ThemeToggle from "../ThemeToggle";
+import { ThemeProvider } from "./theme-provider";
+import ThemeToggle from "./ThemeToggle";
 export const Appbar = () => {
   return (
     <div className="flex justify-between items-center p-4  bg-white dark:bg-black" >
